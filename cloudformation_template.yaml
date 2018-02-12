@@ -1,0 +1,358 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  CloudFormation Template for William Hill
+  
+Mappings:
+  ImageMap:
+    us-east-1:
+      "ubuntu": "ami-66506c1c"
+
+Resources:
+    VPC:
+        Type: "AWS::EC2::VPC"
+        Properties:
+            CidrBlock: 10.0.0.0/16
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
+            InstanceTenancy: default
+    InternetGateway:
+        Type: "AWS::EC2::InternetGateway"
+    AttachGateway:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+    NATGateway:
+      Type: "AWS::EC2::NatGateway"
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - NATGatewayEIP
+            - AllocationId
+        SubnetId: !Ref PublicSubnet1
+    NATGatewayEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: vpc
+    PublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+           VpcId: !Ref VPC
+           CidrBlock: 10.0.0.0/24
+           AvailabilityZone: !Select 
+             - 0
+             - Fn::GetAZs: !Ref 'AWS::Region'
+    PublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+           VpcId: !Ref VPC
+           CidrBlock: 10.0.1.0/24
+           AvailabilityZone: !Select 
+             - 1
+             - Fn::GetAZs: !Ref 'AWS::Region'
+    PrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+           VpcId: !Ref VPC
+           CidrBlock: 10.0.2.0/24
+           AvailabilityZone: !Select 
+             - 0
+             - Fn::GetAZs: !Ref 'AWS::Region'
+    PrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+           VpcId: !Ref VPC
+           CidrBlock: 10.0.3.0/24
+           AvailabilityZone: !Select 
+             - 1
+             - Fn::GetAZs: !Ref 'AWS::Region'
+    PublicSubnetRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+          VpcId: !Ref VPC
+    PrivateSubnetRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+          VpcId: !Ref VPC
+    PublicSubnetRouteToInternetGateway:
+        Type: AWS::EC2::Route
+        DependsOn: AttachGateway
+        Properties:
+          RouteTableId: !Ref PublicSubnetRouteTable
+          DestinationCidrBlock: 0.0.0.0/0
+          GatewayId: !Ref InternetGateway
+    PrivateSubnetRouteToNATGateway:
+        Type: AWS::EC2::Route
+        DependsOn: NATGateway
+        Properties:
+          RouteTableId: !Ref PrivateSubnetRouteTable
+          DestinationCidrBlock: 0.0.0.0/0
+          NatGatewayId: !Ref NATGateway
+    PublicSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId: !Ref PublicSubnet1
+          RouteTableId: !Ref PublicSubnetRouteTable
+    PublicSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId: !Ref PublicSubnet2
+          RouteTableId: !Ref PublicSubnetRouteTable
+    PrivateSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId: !Ref PrivateSubnet1
+          RouteTableId: !Ref PrivateSubnetRouteTable
+    PrivateSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId: !Ref PrivateSubnet2
+          RouteTableId: !Ref PrivateSubnetRouteTable
+    PublicSubnetNetworkAcl:
+        Type: AWS::EC2::NetworkAcl
+        Properties:
+          VpcId: !Ref VPC
+    PrivateSubnetNetworkAcl:
+        Type: AWS::EC2::NetworkAcl
+        Properties:
+          VpcId: !Ref VPC
+    PublicSubnetNetworkAclEntry1:
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref PublicSubnetNetworkAcl
+          RuleNumber: 100
+          Protocol: -1
+          RuleAction: allow
+          Egress: true
+          CidrBlock: 0.0.0.0/0
+    PublicSubnetNetworkAclEntry2:
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref PublicSubnetNetworkAcl
+          RuleNumber: 100
+          Protocol: -1
+          RuleAction: allow
+          Egress: false
+          CidrBlock: 0.0.0.0/0
+    PrivateSubnetNetworkAclEntry1:
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref PrivateSubnetNetworkAcl
+          RuleNumber: 100
+          Protocol: -1
+          RuleAction: allow
+          Egress: true
+          CidrBlock: 0.0.0.0/0
+    PrivateSubnetNetworkAclEntry2:
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref PrivateSubnetNetworkAcl
+          RuleNumber: 100
+          Protocol: -1
+          RuleAction: allow
+          Egress: false
+          CidrBlock: 0.0.0.0/0
+    PublicSubnet1NetworkAclAssociation:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          SubnetId: !Ref PublicSubnet1
+          NetworkAclId: !Ref PublicSubnetNetworkAcl
+    PublicSubnet2NetworkAclAssociation:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          SubnetId: !Ref PublicSubnet2
+          NetworkAclId: !Ref PublicSubnetNetworkAcl
+    PrivateSubnet1NetworkAclAssociation:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          SubnetId: !Ref PrivateSubnet1
+          NetworkAclId: !Ref PrivateSubnetNetworkAcl
+    PrivateSubnet2NetworkAclAssociation:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          SubnetId: !Ref PrivateSubnet2
+          NetworkAclId: !Ref PrivateSubnetNetworkAcl
+    EC2InstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription:  Instance Security Group
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ELBSecurityGroup
+    ELBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: ELB Security Group
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+    S3Bucket:
+      Type: AWS::S3::Bucket
+    EC2InstanceIamPolicy:
+        Type: "AWS::IAM::Policy"
+        Properties:
+            PolicyName: EC2InstanceIamPolicy
+            Roles:
+             - !Ref EC2InstanceIamRole
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                    - "s3:*"
+                  Resource: !Join ['', ['arn:aws:s3:::', !Ref S3Bucket, '/*']]
+    EC2InstanceIamRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+       Path: "/"
+    EC2IamInstanceProfile:
+      Type: "AWS::IAM::InstanceProfile"
+      Properties:
+        Roles:
+         - !Ref EC2InstanceIamRole
+    EC2InstanceLaunchConfiguration:
+      Type: "AWS::AutoScaling::LaunchConfiguration"
+      Properties:
+        AssociatePublicIpAddress: false
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: "gp2"
+              DeleteOnTermination: "true"
+              VolumeSize: "8"
+        EbsOptimized: false
+        IamInstanceProfile: !Ref EC2IamInstanceProfile
+        ImageId: !FindInMap [ImageMap, !Ref "AWS::Region", ubuntu]
+        InstanceMonitoring: false
+        InstanceType: "t2.micro"
+        #KeyName: !FindInMap [KeyPairMap, !Ref "AWS::Region", KeyPair]
+        SecurityGroups:
+          - !Ref EC2InstanceSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            apt-get update -y
+            apt-get install -y curl
+            apt-get install -y git
+            apt-get install zip -y
+            apt-get install apt-transport-https -y
+            cd /root
+            export HOME=/root
+            curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+            mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+            sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > /etc/apt/sources.list.d/dotnetdev.list'
+            apt-get update -y
+            sudo apt-get install -y dotnet-sdk-2.1.4
+            git clone https://github.com/jayyousi/SimpleService.git
+            cd ./SimpleService/src
+            export HOME=/root
+            dotnet build
+            cd ./SimpleService
+            export HOME=/root
+            sudo nohup dotnet run > /dev/null 2>&1 &
+    AutoScalingGroup:
+      Type: "AWS::AutoScaling::AutoScalingGroup"
+      UpdatePolicy:
+        AutoScalingReplacingUpdate:
+          WillReplace: true
+      Properties:
+        LoadBalancerNames:
+          - !Ref ELB
+        DesiredCapacity: 1
+        MaxSize: 4
+        MinSize: 1
+        DesiredCapacity: 1
+        HealthCheckType: ELB
+        HealthCheckGracePeriod: 600
+        LaunchConfigurationName: !Ref EC2InstanceLaunchConfiguration
+        VPCZoneIdentifier:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+    ELB:
+      Type: "AWS::ElasticLoadBalancing::LoadBalancer"
+      Properties:
+        CrossZone: true
+        HealthCheck:
+          HealthyThreshold: 3
+          Interval: 30
+          Target: "HTTP:80/api/Health"
+          Timeout: 10
+          UnhealthyThreshold: 3
+        Listeners:
+          - LoadBalancerPort: '80'
+            InstancePort: '80'
+            Protocol: HTTP
+            InstanceProtocol: HTTP
+        Scheme: internet-facing
+        SecurityGroups:
+          - !Ref ELBSecurityGroup
+        Subnets:
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+    EC2InstanceASGScalingUpPolicy:
+       Type: "AWS::AutoScaling::ScalingPolicy"
+       Properties:
+        AdjustmentType: ChangeInCapacity
+        AutoScalingGroupName: !Ref AutoScalingGroup
+        PolicyType: SimpleScaling
+        ScalingAdjustment: 1
+    EC2InstanceHighCPUUtilizationAlarm:
+        Type: "AWS::CloudWatch::Alarm"
+        Properties:
+          ActionsEnabled: true
+          AlarmActions:
+            - !Ref EC2InstanceASGScalingUpPolicy
+          AlarmDescription: "EC2 Instance High CPU Utilization Alarm"
+          ComparisonOperator: GreaterThanOrEqualToThreshold
+          EvaluationPeriods: 3
+          MetricName: CPUUtilization
+          Namespace: "AWS/EC2"
+          Period: 300
+          Statistic: Average
+          Threshold: 75
+          Dimensions:
+           - Name: AutoScalingGroupName
+             Value: !Ref AutoScalingGroup
+    EC2InstanceASGScalingDownPolicy:
+       Type: "AWS::AutoScaling::ScalingPolicy"
+       Properties:
+        AdjustmentType: ChangeInCapacity
+        AutoScalingGroupName: !Ref AutoScalingGroup
+        PolicyType: SimpleScaling
+        ScalingAdjustment: -1
+    EC2InstanceLowCPUUtilizationAlarm:
+        Type: "AWS::CloudWatch::Alarm"
+        Properties:
+          ActionsEnabled: true
+          AlarmActions:
+            - !Ref EC2InstanceASGScalingDownPolicy
+          AlarmDescription: "EC2 Instance Low CPU Utilization Alarm"
+          ComparisonOperator: LessThanOrEqualToThreshold
+          EvaluationPeriods: 3
+          MetricName: CPUUtilization
+          Namespace: "AWS/EC2"
+          Period: 300
+          Statistic: Average
+          Threshold: 35
+          Dimensions:
+           - Name: AutoScalingGroupName
+             Value: !Ref AutoScalingGroup
